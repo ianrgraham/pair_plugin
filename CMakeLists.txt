@@ -1,3 +1,17 @@
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.9 FATAL_ERROR)
+
+# Name the plugin project
+project(pair_plugin LANGUAGES C CXX)
+
+# Find the installed HOOMD
+find_package(HOOMD 3.7.0 REQUIRED)
+
+message(STATUS "Found HOOMD ${HOOMD_VERSION}: ${HOOMD_INSTALL_PREFIX}/${PYTHON_SITE_INSTALL_DIR}")
+
+# Force installation to the HOOMD installation location
+set(CMAKE_INSTALL_PREFIX ${HOOMD_INSTALL_PREFIX} CACHE PATH "Installation prefix" FORCE)
+endif()
 
 set(COMPONENT_NAME pair_plugin)
 
