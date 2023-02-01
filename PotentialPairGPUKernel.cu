@@ -16,16 +16,16 @@ namespace kernel
 // cuda-streams are not yet supported
 // 
 template __attribute__((visibility("default"))) hipError_t
-gpu_compute_pair_forces<EvaluatorPairMLJ>(const pair_args_t& pair_args,
+gpu_compute_pair_forces<EvaluatorPairMLJ>(const hipStream_t& stream, const pair_args_t& pair_args,
                                           const EvaluatorPairMLJ::param_type* d_params);
 
 template __attribute__((visibility("default"))) hipError_t
-gpu_compute_pair_forces<EvaluatorPairWLJ>(const pair_args_t& pair_args,
+gpu_compute_pair_forces<EvaluatorPairWLJ>(const hipStream_t& stream, const pair_args_t& pair_args,
                                           const EvaluatorPairWLJ::param_type* d_params);
 
 
 template __attribute__((visibility("default"))) hipError_t
-gpu_compute_pair_forces<EvaluatorPairHertzian>(const pair_args_t& pair_args,
+gpu_compute_pair_forces<EvaluatorPairHertzian>(const hipStream_t& stream, const pair_args_t& pair_args,
                                                const EvaluatorPairHertzian::param_type* d_params);
     } // end namespace kernel
     } // end namespace md
