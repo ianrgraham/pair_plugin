@@ -223,4 +223,4 @@ template<class T> void export_HPFPotentialPairGPU(pybind11::module& m, const std
     } // end namespace hoomd
 
 #endif // ENABLE_HIP
-#endif // __ANISO_POTENTIAL_PAIR_GPU_H__
+#endif // __HPF_POTENTIAL_PAIR_GPU_H__

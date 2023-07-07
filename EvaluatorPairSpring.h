@@ -82,12 +82,36 @@ class EvaluatorPairHarmSpring
             return v;
             }
 #endif
-        }
+        };
 #ifdef SINGLE_PRECISION
         __attribute__((aligned(8)));
 #else
         __attribute__((aligned(16)));
 #endif
+
+    // Nullary structure required by AnisoPotentialPair.
+    struct shape_type
+        {
+        //! Load dynamic data members into shared memory and increase pointer
+        /*! \param ptr Pointer to load data to (will be incremented)
+            \param available_bytes Size of remaining shared memory allocation
+        */
+        DEVICE void load_shared(char*& ptr, unsigned int& available_bytes) { }
+
+        HOSTDEVICE void allocate_shared(char*& ptr, unsigned int& available_bytes) const { }
+
+        HOSTDEVICE shape_type() { }
+
+#ifndef __HIPCC__
+
+        shape_type(pybind11::object shape_params, bool managed) { }
+
+        pybind11::object toPython()
+            {
+            return pybind11::none();
+            }
+#endif
+        };
 
     //! Constructs the pair potential evaluator
     /*! \param _rsq Squared distance between the particles

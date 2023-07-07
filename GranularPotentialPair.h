@@ -1,8 +1,8 @@
 // Copyright (c) 2009-2022 The Regents of the University of Michigan.
 // Part of HOOMD-blue, released under the BSD 3-Clause License.
 
-#ifndef __HPF_POTENTIAL_PAIR_H__
-#define __HPF_POTENTIAL_PAIR_H__
+#ifndef __GRANULAR_POTENTIAL_PAIR_H__
+#define __GRANULAR_POTENTIAL_PAIR_H__
 
 #include <iostream>
 #include <memory>
@@ -27,7 +27,7 @@
 #include "hoomd/Communicator.h"
 #endif
 
-/*! \file HPFPotentialPair.h
+/*! \file GranularPotentialPair.h
     \brief Defines the template class for the hard-particle frictional
    interaction \note This header cannot be compiled by nvcc
 */
@@ -44,7 +44,7 @@ namespace md
 //! Hash function for std::pair
 struct pair_hash
     {
-    template<class T1, class T2> size_t operator()(const std::pair<T1, T2>& pair) const
+    template<class T1, class T2> std::size_t operator()(const std::pair<T1, T2>& pair) const
         {
         return std::hash<T1>()(pair.first) ^ std::hash<T2>()(pair.second);
         }
@@ -52,7 +52,7 @@ struct pair_hash
 
 //! Template class for computing pair potentials
 /*! <b>Overview:</b>
-    HPFPotentialPair computes standard pair potentials (and forces)
+    GranularPotentialPair computes standard pair potentials (and forces)
    between all particle pairs in the simulation. It employs the use of a
    neighbor list to limit the number of computations done to only those
    particles with the cutoff radius of each other. The computation of
@@ -73,21 +73,21 @@ struct pair_hash
    appropriate documentation for the evaluator for the definition of
    each element of the parameters.
 */
-template<class evaluator> class HPFPotentialPair : public ForceCompute
+template<class evaluator> class GranularPotentialPair : public ForceCompute
     {
     public:
     //! Param type from evaluator
     typedef typename evaluator::param_type param_type;
 
     //! Construct the pair potential
-    HPFPotentialPair(std::shared_ptr<SystemDefinition> sysdef,
+    GranularPotentialPair(std::shared_ptr<SystemDefinition> sysdef,
                      std::shared_ptr<NeighborList> nlist,
                      Scalar mus,
                      Scalar mur,
                      Scalar ks,
                      Scalar kr);
     //! Destructor
-    virtual ~HPFPotentialPair();
+    virtual ~GranularPotentialPair();
 
     //! Set and get the pair parameters for a single type pair
     virtual void setParams(unsigned int typ1, unsigned int typ2, const param_type& param);
@@ -160,9 +160,9 @@ template<class evaluator> class HPFPotentialPair : public ForceCompute
     void clearDynamicState()
         {
         m_dynamic_state_flag = false;
-        m_xi.clear();
-        m_psi.clear();
-        m_pair_idx.clear();
+        // m_xi.clear();
+        // m_psi.clear();
+        // m_pair_idx.clear();
         }
 
     virtual void notifyDetach()
@@ -222,23 +222,33 @@ template<class evaluator> class HPFPotentialPair : public ForceCompute
     bool m_dynamic_state_flag = false;
     bool m_persist_state_on_detach = false;
 
+    // TODO NEW remake friction members so that they transfer well to GPU
+    GlobalArray<Scalar3> m_xi;
+    GlobalArray<Scalar3> m_psi;
     // Dynamically track quantities relevant to contact friction
     // Angular momentum quaternion needs to be converted to real space
     // frame vector for these computations
-    std::vector<Scalar3, hoomd::detail::managed_allocator<Scalar3>>
-        m_xi; //!< transverse surface velocity integrated
-    std::vector<Scalar3, hoomd::detail::managed_allocator<Scalar3>>
-        m_psi; //!< rotational surface velocity integrated
+    // std::vector<Scalar3, hoomd::detail::managed_allocator<Scalar3>>
+    //     m_xi; //!< transverse surface velocity integrated
+    // std::vector<Scalar3, hoomd::detail::managed_allocator<Scalar3>>
+    //     m_psi; //!< rotational surface velocity integrated
 
     /// Maps pairs of particles to indices in the surface velocities
     /// This will be necessary to resort the arrays after neighborlist
     /// updates
-    std::unordered_map<std::pair<unsigned int, unsigned int>, unsigned int, pair_hash> m_pair_idx;
+    // std::unordered_map<std::pair<unsigned int, unsigned int>, unsigned int, pair_hash> m_pair_idx;
+    // NEW hashmap is no longer needed since we can just use the neighborlist to get the offsets
 
-    // Might replace the above variable with a list
+    // std::unordered_map<unsigned int, Scalar3>
+    //     m_w_cache; //!< Cache for the angular velocity of each particle
+    // NEW compute omega eagerly once per timestep to use during force calculation
+    GlobalArray<Scalar3> m_omega;
 
-    std::unordered_map<unsigned int, Scalar3>
-        m_w_cache; //!< Cache for the angular velocity of each particle
+    // Keep local copies of the neighborlist
+    // Necessary for to update list when the neighborlist is updated
+    GlobalArray<unsigned int> m_local_nlist;
+    GlobalArray<unsigned int> m_local_n_neigh;
+    GlobalArray<size_t> m_local_head_list;
 
     /// r_cut (not squared) given to the neighbor list
     std::shared_ptr<GlobalArray<Scalar>> m_r_cut_nlist;
@@ -259,13 +269,13 @@ template<class evaluator> class HPFPotentialPair : public ForceCompute
     //! Actually compute the forces
     virtual void computeForces(uint64_t timestep);
 
-    }; // end class HPFPotentialPair
+    }; // end class GranularPotentialPair
 
 /*! \param sysdef System to compute forces on
     \param nlist Neighborlist to use for computing the forces
 */
 template<class evaluator>
-HPFPotentialPair<evaluator>::HPFPotentialPair(std::shared_ptr<SystemDefinition> sysdef,
+GranularPotentialPair<evaluator>::GranularPotentialPair(std::shared_ptr<SystemDefinition> sysdef,
                                               std::shared_ptr<NeighborList> nlist,
                                               Scalar mus,
                                               Scalar mur,
@@ -274,28 +284,55 @@ HPFPotentialPair<evaluator>::HPFPotentialPair(std::shared_ptr<SystemDefinition> 
     : ForceCompute(sysdef), m_nlist(nlist), m_shift_mode(no_shift),
       m_typpair_idx(m_pdata->getNTypes()), m_mus(mus), m_mur(mur), m_ks(ks), m_kr(kr)
     {
-    m_exec_conf->msg->notice(5) << "Constructing HPFPotentialPair<" << evaluator::getName() << ">"
+    m_exec_conf->msg->notice(5) << "Constructing GranularPotentialPair<" << evaluator::getName() << ">"
                                 << std::endl;
 
     assert(m_pdata);
     assert(m_nlist);
 
     // initialize empty containers for xi, psi, pair_idx, and w_cache
-    std::vector<Scalar3, hoomd::detail::managed_allocator<Scalar3>> xi;
-    std::vector<Scalar3, hoomd::detail::managed_allocator<Scalar3>> psi;
-    std::unordered_map<std::pair<unsigned int, unsigned int>, unsigned int, pair_hash> pair_idx;
-    std::unordered_map<unsigned int, Scalar3> w_cache;
+    // std::vector<Scalar3, hoomd::detail::managed_allocator<Scalar3>> xi;
+    // std::vector<Scalar3, hoomd::detail::managed_allocator<Scalar3>> psi;
+    // std::unordered_map<std::pair<unsigned int, unsigned int>, unsigned int, pair_hash> pair_idx;
+    // std::unordered_map<unsigned int, Scalar3> w_cache;
+    // NEW no longer needed
 
-    auto num_nlist_elements = 0;
-    xi.reserve(num_nlist_elements);
-    psi.reserve(num_nlist_elements);
-    pair_idx.reserve(m_pair_idx.max_load_factor() * num_nlist_elements);
-    w_cache.reserve(w_cache.max_load_factor() * num_nlist_elements);
+    // auto num_nlist_elements = 0;
+    // xi.reserve(num_nlist_elements);
+    // psi.reserve(num_nlist_elements);
+    // pair_idx.reserve(m_pair_idx.max_load_factor() * num_nlist_elements);
+    // w_cache.reserve(w_cache.max_load_factor() * num_nlist_elements);
 
+    // m_xi.swap(xi);
+    // m_psi.swap(psi);
+    // m_pair_idx.swap(pair_idx);
+    // m_w_cache.swap(w_cache);
+
+    auto friction_array_size = m_nlist->getNListArray().m_num_elements;
+    GlobalArray<Scalar3> xi(friction_array_size, m_exec_conf);
     m_xi.swap(xi);
+    TAG_ALLOCATION(m_xi);
+
+    GlobalArray<Scalar3> psi(friction_array_size, m_exec_conf);
     m_psi.swap(psi);
-    m_pair_idx.swap(pair_idx);
-    m_w_cache.swap(w_cache);
+    TAG_ALLOCATION(m_psi);
+
+    GlobalArray<Scalar3> omega(m_pdata->getN() + m_pdata->getNGhosts(), m_exec_conf);
+    m_omega.swap(omega);
+    TAG_ALLOCATION(m_omega);
+
+    GlobalArray<unsigned int> local_nlist(m_nlist->getNListArray().m_num_elements, m_exec_conf);
+    m_local_nlist.swap(local_nlist);
+    TAG_ALLOCATION(m_local_nlist);
+
+    GlobalArray<unsigned int> local_n_neigh(m_nlist->getNNeighArray().m_num_elements, m_exec_conf);
+    m_local_n_neigh.swap(local_n_neigh);
+    TAG_ALLOCATION(m_local_n_neigh);
+
+    GlobalArray<size_t> local_head_list(m_nlist->getHeadListArray().m_num_elements, m_exec_conf);
+    m_local_head_list.swap(local_head_list);
+    TAG_ALLOCATION(m_local_head_list);
+    
 
     GlobalArray<Scalar> rcutsq(m_typpair_idx.getNumElements(), m_exec_conf);
     m_rcutsq.swap(rcutsq);
@@ -380,9 +417,9 @@ HPFPotentialPair<evaluator>::HPFPotentialPair(std::shared_ptr<SystemDefinition> 
 #endif
     }
 
-template<class evaluator> HPFPotentialPair<evaluator>::~HPFPotentialPair()
+template<class evaluator> GranularPotentialPair<evaluator>::~GranularPotentialPair()
     {
-    m_exec_conf->msg->notice(5) << "Destroying HPFPotentialPair<" << evaluator::getName() << ">"
+    m_exec_conf->msg->notice(5) << "Destroying GranularPotentialPair<" << evaluator::getName() << ">"
                                 << std::endl;
 
     if (m_attached)
@@ -398,7 +435,7 @@ template<class evaluator> HPFPotentialPair<evaluator>::~HPFPotentialPair()
    for (\a typ2, \a typ1) is automatically set.
 */
 template<class evaluator>
-void HPFPotentialPair<evaluator>::setParams(unsigned int typ1,
+void GranularPotentialPair<evaluator>::setParams(unsigned int typ1,
                                             unsigned int typ2,
                                             const param_type& param)
     {
@@ -408,14 +445,14 @@ void HPFPotentialPair<evaluator>::setParams(unsigned int typ1,
     }
 
 template<class evaluator>
-void HPFPotentialPair<evaluator>::setParamsPython(pybind11::tuple typ, pybind11::dict params)
+void GranularPotentialPair<evaluator>::setParamsPython(pybind11::tuple typ, pybind11::dict params)
     {
     auto typ1 = m_pdata->getTypeByName(typ[0].cast<std::string>());
     auto typ2 = m_pdata->getTypeByName(typ[1].cast<std::string>());
     setParams(typ1, typ2, param_type(params, m_exec_conf->isCUDAEnabled()));
     }
 
-template<class evaluator> pybind11::dict HPFPotentialPair<evaluator>::getParams(pybind11::tuple typ)
+template<class evaluator> pybind11::dict GranularPotentialPair<evaluator>::getParams(pybind11::tuple typ)
     {
     auto typ1 = m_pdata->getTypeByName(typ[0].cast<std::string>());
     auto typ2 = m_pdata->getTypeByName(typ[1].cast<std::string>());
@@ -425,7 +462,7 @@ template<class evaluator> pybind11::dict HPFPotentialPair<evaluator>::getParams(
     }
 
 template<class evaluator>
-void HPFPotentialPair<evaluator>::validateTypes(unsigned int typ1,
+void GranularPotentialPair<evaluator>::validateTypes(unsigned int typ1,
                                                 unsigned int typ2,
                                                 std::string action)
     {
@@ -443,7 +480,7 @@ void HPFPotentialPair<evaluator>::validateTypes(unsigned int typ1,
    for (\a typ2, \a typ1) is automatically set.
 */
 template<class evaluator>
-void HPFPotentialPair<evaluator>::setRcut(unsigned int typ1, unsigned int typ2, Scalar rcut)
+void GranularPotentialPair<evaluator>::setRcut(unsigned int typ1, unsigned int typ2, Scalar rcut)
     {
     validateTypes(typ1, typ2, "setting r_cut");
         {
@@ -466,14 +503,14 @@ void HPFPotentialPair<evaluator>::setRcut(unsigned int typ1, unsigned int typ2, 
     }
 
 template<class evaluator>
-void HPFPotentialPair<evaluator>::setRCutPython(pybind11::tuple types, Scalar r_cut)
+void GranularPotentialPair<evaluator>::setRCutPython(pybind11::tuple types, Scalar r_cut)
     {
     auto typ1 = m_pdata->getTypeByName(types[0].cast<std::string>());
     auto typ2 = m_pdata->getTypeByName(types[1].cast<std::string>());
     setRcut(typ1, typ2, r_cut);
     }
 
-template<class evaluator> Scalar HPFPotentialPair<evaluator>::getRCut(pybind11::tuple types)
+template<class evaluator> Scalar GranularPotentialPair<evaluator>::getRCut(pybind11::tuple types)
     {
     auto typ1 = m_pdata->getTypeByName(types[0].cast<std::string>());
     auto typ2 = m_pdata->getTypeByName(types[1].cast<std::string>());
@@ -483,10 +520,10 @@ template<class evaluator> Scalar HPFPotentialPair<evaluator>::getRCut(pybind11::
     }
 
 template<class evaluator>
-void HPFPotentialPair<evaluator>::connectGSDShapeSpec(std::shared_ptr<GSDDumpWriter> writer)
+void GranularPotentialPair<evaluator>::connectGSDShapeSpec(std::shared_ptr<GSDDumpWriter> writer)
     {
     typedef hoomd::detail::SharedSignalSlot<int(gsd_handle&)> SlotType;
-    auto func = std::bind(&HPFPotentialPair<evaluator>::slotWriteGSDShapeSpec,
+    auto func = std::bind(&GranularPotentialPair<evaluator>::slotWriteGSDShapeSpec,
                           this,
                           std::placeholders::_1);
     std::shared_ptr<hoomd::detail::SignalSlot> pslot(new SlotType(writer->getWriteSignal(), func));
@@ -494,10 +531,10 @@ void HPFPotentialPair<evaluator>::connectGSDShapeSpec(std::shared_ptr<GSDDumpWri
     }
 
 template<class evaluator>
-int HPFPotentialPair<evaluator>::slotWriteGSDShapeSpec(gsd_handle& handle) const
+int GranularPotentialPair<evaluator>::slotWriteGSDShapeSpec(gsd_handle& handle) const
     {
     hoomd::detail::GSDShapeSpecWriter shapespec(m_exec_conf);
-    m_exec_conf->msg->notice(10) << "HPFPotentialPair writing to GSD File to name: "
+    m_exec_conf->msg->notice(10) << "GranularPotentialPair writing to GSD File to name: "
                                  << shapespec.getName() << std::endl;
     int retval = shapespec.write(handle, this->getTypeShapeMapping());
     return retval;
@@ -509,7 +546,7 @@ int HPFPotentialPair<evaluator>::slotWriteGSDShapeSpec(gsd_handle& handle) const
 
     \param timestep specifies the current time step of the simulation
 */
-template<class evaluator> void HPFPotentialPair<evaluator>::computeForces(uint64_t timestep)
+template<class evaluator> void GranularPotentialPair<evaluator>::computeForces(uint64_t timestep)
     {
     // start by updating the neighborlist
     m_nlist->compute(timestep);
@@ -567,53 +604,52 @@ template<class evaluator> void HPFPotentialPair<evaluator>::computeForces(uint64
     // let's handle the startup and rebuild case
     if (!m_dynamic_state_flag || nlist_updated)
         {
-        std::cout << "Rebuild nlist: " << timestep << std::endl;
         m_dynamic_state_flag = true;
 
-        std::vector<Scalar3, hoomd::detail::managed_allocator<Scalar3>> xi;
-        std::vector<Scalar3, hoomd::detail::managed_allocator<Scalar3>> psi;
-        std::unordered_map<std::pair<unsigned int, unsigned int>, unsigned int, pair_hash> pair_idx;
+        // std::vector<Scalar3, hoomd::detail::managed_allocator<Scalar3>> xi;
+        // std::vector<Scalar3, hoomd::detail::managed_allocator<Scalar3>> psi;
+        // std::unordered_map<std::pair<unsigned int, unsigned int>, unsigned int, pair_hash> pair_idx;
 
-        // maybe we don't need to reserve?
-        xi.reserve(m_xi.size());
-        psi.reserve(m_psi.size());
-        pair_idx.reserve(m_pair_idx.bucket_count());
+        // // maybe we don't need to reserve?
+        // xi.reserve(m_xi.size());
+        // psi.reserve(m_psi.size());
+        // pair_idx.reserve(m_pair_idx.bucket_count());
 
-        xi.swap(m_xi);
-        psi.swap(m_psi);
-        pair_idx.swap(m_pair_idx);
+        // xi.swap(m_xi);
+        // psi.swap(m_psi);
+        // pair_idx.swap(m_pair_idx);
 
-        clearDynamicState();
+        // clearDynamicState();
 
-        unsigned int idx = 0;
-        for (int i = 0; i < (int)m_pdata->getN(); i++)
-            {
-            auto tag_i = h_tag.data[i];
-            const size_t myHead = h_head_list.data[i];
-            const unsigned int size = (unsigned int)h_n_neigh.data[i];
-            for (unsigned int k = 0; k < size; k++)
-                {
-                // access the index of this neighbor (MEM TRANSFER: 1
-                // scalar)
-                unsigned int j = h_nlist.data[myHead + k];
-                auto tag_j = h_tag.data[j];
-                auto pair = std::make_pair(tag_i, tag_j);
-                if (pair_idx.empty() || pair_idx.find(pair) == pair_idx.end())
-                    {
-                    m_xi.push_back(make_scalar3(0, 0, 0));
-                    m_psi.push_back(make_scalar3(0, 0, 0));
-                    }
-                else
-                    {
-                    unsigned int mapped_idx = pair_idx[pair];
+        // unsigned int idx = 0;
+        // for (int i = 0; i < (int)m_pdata->getN(); i++)
+        //     {
+        //     auto tag_i = h_tag.data[i];
+        //     const size_t myHead = h_head_list.data[i];
+        //     const unsigned int size = (unsigned int)h_n_neigh.data[i];
+        //     for (unsigned int k = 0; k < size; k++)
+        //         {
+        //         // access the index of this neighbor (MEM TRANSFER: 1
+        //         // scalar)
+        //         unsigned int j = h_nlist.data[myHead + k];
+        //         auto tag_j = h_tag.data[j];
+        //         auto pair = std::make_pair(tag_i, tag_j);
+        //         if (pair_idx.empty() || pair_idx.find(pair) == pair_idx.end())
+        //             {
+        //             m_xi.push_back(make_scalar3(0, 0, 0));
+        //             m_psi.push_back(make_scalar3(0, 0, 0));
+        //             }
+        //         else
+        //             {
+        //             unsigned int mapped_idx = pair_idx[pair];
 
-                    m_xi.push_back(xi[mapped_idx]);
-                    m_psi.push_back(psi[mapped_idx]);
-                    }
-                m_pair_idx[pair] = idx;
-                idx++;
-                }
-            }
+        //             m_xi.push_back(xi[mapped_idx]);
+        //             m_psi.push_back(psi[mapped_idx]);
+        //             }
+        //         m_pair_idx[pair] = idx;
+        //         idx++;
+        //         }
+        //     }
         }
 
     auto xi_it = m_xi.begin();
@@ -732,7 +768,7 @@ template<class evaluator> void HPFPotentialPair<evaluator>::computeForces(uint64
             //! interaction. We'll also need to calculate the
             //! non-conservative friction forces if the conservative
             //! interaction is non-zero (in contact).
-            bool evaluated = eval.evalForceAndEnergyHPF(force_divr, pair_eng, r, rinv);
+            bool evaluated = eval.evalForceAndEnergyGranular(force_divr, pair_eng, r, rinv);
 
             if (evaluated)
                 {
@@ -904,7 +940,7 @@ template<class evaluator> void HPFPotentialPair<evaluator>::computeForces(uint64
 /*! \param timestep Current time step
  */
 template<class evaluator>
-CommFlags HPFPotentialPair<evaluator>::getRequestedCommFlags(uint64_t timestep)
+CommFlags GranularPotentialPair<evaluator>::getRequestedCommFlags(uint64_t timestep)
     {
     CommFlags flags = CommFlags(0);
 
@@ -926,9 +962,9 @@ namespace detail
 /*! \param name Name of the class in the exported python module
     \tparam T Evaluator type to export.
 */
-template<class T> void export_HPFPotentialPair(pybind11::module& m, const std::string& name)
+template<class T> void export_GranularPotentialPair(pybind11::module& m, const std::string& name)
     {
-    pybind11::class_<HPFPotentialPair<T>, ForceCompute, std::shared_ptr<HPFPotentialPair<T>>>
+    pybind11::class_<GranularPotentialPair<T>, ForceCompute, std::shared_ptr<GranularPotentialPair<T>>>
         potentialpair(m, name.c_str());
     potentialpair
         .def(pybind11::init<std::shared_ptr<SystemDefinition>,
@@ -937,20 +973,20 @@ template<class T> void export_HPFPotentialPair(pybind11::module& m, const std::s
                             Scalar,
                             Scalar,
                             Scalar>())
-        .def("setParams", &HPFPotentialPair<T>::setParamsPython)
-        .def("getParams", &HPFPotentialPair<T>::getParams)
-        .def("setRCut", &HPFPotentialPair<T>::setRCutPython)
-        .def("getRCut", &HPFPotentialPair<T>::getRCut)
-        // .def("_evaluate", &HPFPotentialPair<T>::evaluate)
-        .def("slotWriteGSDShapeSpec", &HPFPotentialPair<T>::slotWriteGSDShapeSpec)
-        .def("connectGSDShapeSpec", &HPFPotentialPair<T>::connectGSDShapeSpec)
-        .def_readwrite("log_pair_info", &HPFPotentialPair<T>::m_log_pair_info)
-        .def_readwrite("gamma", &HPFPotentialPair<T>::m_gamma)
-        .def_property("hi_shear_rate", &HPFPotentialPair<T>::getHIShearRate, &HPFPotentialPair<T>::setHIShearRate);
+        .def("setParams", &GranularPotentialPair<T>::setParamsPython)
+        .def("getParams", &GranularPotentialPair<T>::getParams)
+        .def("setRCut", &GranularPotentialPair<T>::setRCutPython)
+        .def("getRCut", &GranularPotentialPair<T>::getRCut)
+        // .def("_evaluate", &GranularPotentialPair<T>::evaluate)
+        .def("slotWriteGSDShapeSpec", &GranularPotentialPair<T>::slotWriteGSDShapeSpec)
+        .def("connectGSDShapeSpec", &GranularPotentialPair<T>::connectGSDShapeSpec)
+        .def_readwrite("log_pair_info", &GranularPotentialPair<T>::m_log_pair_info)
+        .def_readwrite("gamma", &GranularPotentialPair<T>::m_gamma)
+        .def_property("hi_shear_rate", &GranularPotentialPair<T>::getHIShearRate, &GranularPotentialPair<T>::setHIShearRate);
     }
 
     } // end namespace detail
     } // end namespace md
     } // end namespace hoomd
 
-#endif // __HPF_POTENTIAL_PAIR_H__
+#endif // __GRANULAR_POTENTIAL_PAIR_H__

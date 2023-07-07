@@ -15,13 +15,13 @@
 #include "hoomd/WarpTools.cuh"
 #endif // __HIPCC__
 
-/*! \file HPFPotentialPairGPU.cuh
+/*! \file GranularPotentialPairGPU.cuh
     \brief Defines templated GPU kernel code for calculating the anisotropic ptl pair forces and
    torques
 */
 
-#ifndef __HPF_POTENTIAL_PAIR_GPU_CUH__
-#define __HPF_POTENTIAL_PAIR_GPU_CUH__
+#ifndef __GRANULAR_POTENTIAL_PAIR_GPU_CUH__
+#define __GRANULAR_POTENTIAL_PAIR_GPU_CUH__
 
 //! Maximum number of threads (width of a warp)
 // currently this is hardcoded, we should set it to the max of platforms
@@ -399,7 +399,7 @@ gpu_compute_pair_aniso_forces_kernel(Scalar4* d_force,
         }
     }
 
-//! HPF pair force compute kernel launcher
+//! Granular pair force compute kernel launcher
 /*!
  * \tparam evaluator EvaluatorPair class to evaluate V(r) and -delta V(r)/r
  * \tparam shift_mode 0: No energy shifting is done. 1: V(r) is shifted to be 0 at rcut.
@@ -411,7 +411,7 @@ gpu_compute_pair_aniso_forces_kernel(Scalar4* d_force,
  * with a struct that we are allowed to partially specialize.
  */
 template<class evaluator, unsigned int shift_mode, unsigned int compute_virial, int tpp>
-struct HPFPairForceComputeKernel
+struct GranularPairForceComputeKernel
     {
     //! Launcher for the pair force kernel
     /*!
@@ -509,7 +509,7 @@ struct HPFPairForceComputeKernel
             }
         else
             {
-            HPFPairForceComputeKernel<evaluator, shift_mode, compute_virial, tpp / 2>::launch(
+            GranularPairForceComputeKernel<evaluator, shift_mode, compute_virial, tpp / 2>::launch(
                 pair_args,
                 range,
                 params,
@@ -520,7 +520,7 @@ struct HPFPairForceComputeKernel
 
 //! Template specialization to do nothing for the tpp = 0 case
 template<class evaluator, unsigned int shift_mode, unsigned int compute_virial>
-struct HPFPairForceComputeKernel<evaluator, shift_mode, compute_virial, 0>
+struct GranularPairForceComputeKernel<evaluator, shift_mode, compute_virial, 0>
     {
     static void launch(const a_pair_args_t& pair_args,
                        std::pair<unsigned int, unsigned int> range,
@@ -531,7 +531,7 @@ struct HPFPairForceComputeKernel<evaluator, shift_mode, compute_virial, 0>
         }
     };
 
-//! Kernel driver that computes lj forces on the GPU for HPFPotentialPairGPU
+//! Kernel driver that computes lj forces on the GPU for GranularPotentialPairGPU
 /*! \param pair_args Other arguments to pass onto the kernel
     \param d_params Parameters for the potential, stored per type pair
 
@@ -558,7 +558,7 @@ hipError_t gpu_compute_pair_aniso_forces(const a_pair_args_t& pair_args,
                 {
             case 0:
                 {
-                HPFPairForceComputeKernel<evaluator, 0, 1, gpu_aniso_pair_force_max_tpp>::launch(
+                GranularPairForceComputeKernel<evaluator, 0, 1, gpu_aniso_pair_force_max_tpp>::launch(
                     pair_args,
                     range,
                     d_params,
@@ -567,7 +567,7 @@ hipError_t gpu_compute_pair_aniso_forces(const a_pair_args_t& pair_args,
                 }
             case 1:
                 {
-                HPFPairForceComputeKernel<evaluator,
+                GranularPairForceComputeKernel<evaluator,
                                             1 && evaluator::implementsEnergyShift(),
                                             1,
                                             gpu_aniso_pair_force_max_tpp>::launch(pair_args,
@@ -586,7 +586,7 @@ hipError_t gpu_compute_pair_aniso_forces(const a_pair_args_t& pair_args,
                 {
             case 0:
                 {
-                HPFPairForceComputeKernel<evaluator, 0, 0, gpu_aniso_pair_force_max_tpp>::launch(
+                GranularPairForceComputeKernel<evaluator, 0, 0, gpu_aniso_pair_force_max_tpp>::launch(
                     pair_args,
                     range,
                     d_params,
@@ -595,7 +595,7 @@ hipError_t gpu_compute_pair_aniso_forces(const a_pair_args_t& pair_args,
                 }
             case 1:
                 {
-                HPFPairForceComputeKernel<evaluator,
+                GranularPairForceComputeKernel<evaluator,
                                             1 && evaluator::implementsEnergyShift(),
                                             0,
                                             gpu_aniso_pair_force_max_tpp>::launch(pair_args,
@@ -622,4 +622,4 @@ hipError_t gpu_compute_pair_aniso_forces(const a_pair_args_t& pair_args,
     } // end namespace md
     } // end namespace hoomd
 
-#endif // __ANISO_POTENTIAL_PAIR_GPU_CUH__
+#endif // __GRANULAR_POTENTIAL_PAIR_GPU_CUH__

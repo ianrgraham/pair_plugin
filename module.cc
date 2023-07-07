@@ -3,14 +3,13 @@
 // License.
 
 // Include the defined classes that are to be exported to python
+#include <pybind11/pybind11.h>
 #include "EvaluatorPairHertzian.h"
 #include "EvaluatorPairMLJ.h"
 #include "EvaluatorPairWLJ.h"
 #include "EvaluatorPairSpring.h"
 #include "HPFPotentialPair.h"
 #include "hoomd/md/PotentialPair.h"
-
-#include <pybind11/pybind11.h>
 
 #ifdef ENABLE_HIP
 #include "hoomd/md/PotentialPairGPU.h"
@@ -30,6 +29,7 @@ PYBIND11_MODULE(_pair_plugin, m)
     detail::export_PotentialPair<EvaluatorPairWLJ>(m, "PotentialPairWLJ");
     detail::export_PotentialPair<EvaluatorPairHertzian>(m, "PotentialPairHertzian");
     detail::export_HPFPotentialPair<EvaluatorPairHarmSpring>(m, "PotentialPairHPF");
+    // detail::export_GranularPotentialPair<EvaluatorPairHarmSpring>(m, "PotentialPairGranular");
 #ifdef ENABLE_HIP
     detail::export_PotentialPairGPU<EvaluatorPairMLJ>(m, "PotentialPairMLJGPU");
     detail::export_PotentialPairGPU<EvaluatorPairWLJ>(m, "PotentialPairWLJGPU");

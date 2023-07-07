@@ -341,4 +341,4 @@ class EvaluatorPairWLJ
     } // end namespace md
     } // end namespace hoomd
 
-#endif // __PAIR_EVALUATOR_MLJ_H__
+#endif // __PAIR_EVALUATOR_WLJ_H__
