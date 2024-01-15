@@ -7,6 +7,7 @@
 #include "EvaluatorPairHertzian.h"
 #include "EvaluatorPairMLJ.h"
 #include "EvaluatorPairWLJ.h"
+#include "EvaluatorPairDipoleDipole.h"
 #include "EvaluatorPairSpring.h"
 #include "HPFPotentialPair.h"
 #include "hoomd/md/PotentialPair.h"
@@ -28,12 +29,14 @@ PYBIND11_MODULE(_pair_plugin, m)
     detail::export_PotentialPair<EvaluatorPairMLJ>(m, "PotentialPairMLJ");
     detail::export_PotentialPair<EvaluatorPairWLJ>(m, "PotentialPairWLJ");
     detail::export_PotentialPair<EvaluatorPairHertzian>(m, "PotentialPairHertzian");
+    detail::export_PotentialPair<EvaluatorPairDipoleDipole>(m, "PotentialPairDipoleDipole");
     detail::export_HPFPotentialPair<EvaluatorPairHarmSpring>(m, "PotentialPairHPF");
     // detail::export_GranularPotentialPair<EvaluatorPairHarmSpring>(m, "PotentialPairGranular");
 #ifdef ENABLE_HIP
     detail::export_PotentialPairGPU<EvaluatorPairMLJ>(m, "PotentialPairMLJGPU");
     detail::export_PotentialPairGPU<EvaluatorPairWLJ>(m, "PotentialPairWLJGPU");
     detail::export_PotentialPairGPU<EvaluatorPairHertzian>(m, "PotentialPairHertzianGPU");
+    detail::export_PotentialPairGPU<EvaluatorPairDipoleDipole>(m, "PotentialPairDipoleDipoleGPU");
     // TODO, write GPU implementation
     // detail::export_FrictionPotentialPairGPU<EvaluatorPairFrictionLJ>(m,
     // "PotentialPairFrictionLJGPU");
