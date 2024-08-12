@@ -5,7 +5,7 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.9 FATAL_ERROR)
 project(pair_plugin LANGUAGES C CXX)
 
 # Find the installed HOOMD
-find_package(HOOMD 3.0.0 REQUIRED)
+find_package(HOOMD 4.0.0 REQUIRED)
 
 message(STATUS "Found HOOMD ${HOOMD_VERSION}: ${HOOMD_INSTALL_PREFIX}/${PYTHON_SITE_INSTALL_DIR}")
 
@@ -42,8 +42,6 @@ target_link_libraries(_${COMPONENT_NAME}
         PUBLIC HOOMD::_hoomd
         PUBLIC HOOMD::_md
         )
-
-fix_cudart_rpath(_${COMPONENT_NAME})
 
 # install the library
 install(TARGETS _${COMPONENT_NAME}

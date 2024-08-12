@@ -4,6 +4,7 @@
 #include "EvaluatorPairHertzian.h"
 #include "EvaluatorPairMLJ.h"
 #include "EvaluatorPairWLJ.h"
+#include "EvaluatorPairLJLow.h"
 #include "EvaluatorPairDipoleDipole.h"
 #include "hoomd/md/PotentialPairGPU.cuh"
 
@@ -24,6 +25,9 @@ template __attribute__((visibility("default"))) hipError_t
 gpu_compute_pair_forces<EvaluatorPairWLJ>(const pair_args_t& pair_args,
                                           const EvaluatorPairWLJ::param_type* d_params);
 
+template __attribute__((visibility("default"))) hipError_t
+gpu_compute_pair_forces<EvaluatorPairLJLow>(const pair_args_t& pair_args,
+                                          const EvaluatorPairLJLow::param_type* d_params);
 
 template __attribute__((visibility("default"))) hipError_t
 gpu_compute_pair_forces<EvaluatorPairHertzian>(const pair_args_t& pair_args,

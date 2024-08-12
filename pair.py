@@ -86,6 +86,29 @@ class ModLJ(_pair.Pair):
         self._add_typeparam(params)
 
 
+class LJLow(_pair.Pair):
+    r"""
+    """
+
+    # Name of the potential we want to reference on the C++ side
+    _cpp_class_name = "PotentialPairLJLow"
+    _ext_module = _pair_plugin
+
+    def __init__(self,
+                 nlist,
+                 default_r_cut=None,
+                 default_r_on=0.,
+                 mode='none'):
+        super().__init__(nlist, default_r_cut, default_r_on, mode)
+        params = TypeParameter(
+            'params', 'particle_types',
+            TypeParameterDict(epsilon=float,
+                              sigma=float,
+                              len_keys=2))
+        self._add_typeparam(params)
+
+
+
 class MLJ(ModLJ):
     pass
 

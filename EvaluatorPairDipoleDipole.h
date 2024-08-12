@@ -40,7 +40,7 @@ class EvaluatorPairDipoleDipole
     //! Define the parameter type used by this pair potential evaluator
     struct param_type
         {
-        Scalar epsilon; //!< Strength of the dipole-dipole interaction
+        Scalar eps; //!< Strength of the dipole-dipole interaction
 
         DEVICE void load_shared(char*& ptr, unsigned int& available_bytes) { }
 
@@ -114,7 +114,7 @@ class EvaluatorPairDipoleDipole
         \param qj Charge of particle j
     */
     DEVICE void setCharge(Scalar qi, Scalar qj) {
-        sc = qi + qj;
+        sc = qi * qj;
     }
 
     //! Evaluate the force and energy
